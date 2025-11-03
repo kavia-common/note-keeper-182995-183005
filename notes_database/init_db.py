@@ -3,6 +3,7 @@
 
 import sqlite3
 import os
+import time
 
 DB_NAME = "myapp.db"
 DB_USER = "kaviasqlite"  # Not used for SQLite, but kept for consistency
@@ -30,6 +31,9 @@ else:
 conn = sqlite3.connect(DB_NAME)
 cursor = conn.cursor()
 
+# Ensure pragmas that help with consistency
+cursor.execute("PRAGMA foreign_keys = ON")
+
 # Create initial schema
 cursor.execute("""
     CREATE TABLE IF NOT EXISTS app_info (
@@ -50,7 +54,18 @@ cursor.execute("""
     )
 """)
 
-# Insert initial data
+# Create notes table required by the app
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS notes(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at INTEGER,
+        updated_at INTEGER
+    )
+""")
+
+# Insert initial data into app_info
 cursor.execute("INSERT OR REPLACE INTO app_info (key, value) VALUES (?, ?)", 
                ("project_name", "notes_database"))
 cursor.execute("INSERT OR REPLACE INTO app_info (key, value) VALUES (?, ?)", 
@@ -60,6 +75,22 @@ cursor.execute("INSERT OR REPLACE INTO app_info (key, value) VALUES (?, ?)",
 cursor.execute("INSERT OR REPLACE INTO app_info (key, value) VALUES (?, ?)", 
                ("description", ""))
 
+# Optionally seed 1-2 sample notes if table is empty
+cursor.execute("SELECT COUNT(*) FROM notes")
+notes_count_before = cursor.fetchone()[0]
+
+if notes_count_before == 0:
+    now = int(time.time())
+    sample_notes = [
+        ("Welcome to Note Keeper", "This is your first note. Edit or delete it as you like.", now, now),
+        ("Tips", "Swipe to delete, tap to edit. Your notes live in SQLite.", now, now),
+    ]
+    for title, content, created_at, updated_at in sample_notes:
+        cursor.execute(
+            "INSERT INTO notes (title, content, created_at, updated_at) VALUES (?, ?, ?, ?)",
+            (title, content, created_at, updated_at),
+        )
+
 conn.commit()
 
 # Get database statistics
@@ -68,6 +99,10 @@ table_count = cursor.fetchone()[0]
 
 cursor.execute("SELECT COUNT(*) FROM app_info")
 record_count = cursor.fetchone()[0]
+
+# Get notes count after seeding
+cursor.execute("SELECT COUNT(*) FROM notes")
+notes_count_after = cursor.fetchone()[0]
 
 conn.close()
 
@@ -116,6 +151,7 @@ print("")
 print("Database statistics:")
 print(f"  Tables: {table_count}")
 print(f"  App info records: {record_count}")
+print(f"  Notes records: {notes_count_after}")
 
 # If sqlite3 CLI is available, show how to use it
 try:
